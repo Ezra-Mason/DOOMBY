@@ -12,14 +12,14 @@
  *  Widget setup is handled in a Blueprint subclass.
  */
 UCLASS(abstract)
-class DOOMBY_API UDOOMBYUI : public UUserWidget
+class UDOOMBYUI : public UUserWidget
 {
 	GENERATED_BODY()
 	
 protected:
 
 	/** Controls the display of speed in Km/h or MPH */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Vehicle)
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Vehicle")
 	bool bIsMPH = false;
 
 public:
@@ -33,10 +33,10 @@ public:
 protected:
 
 	/** Implemented in Blueprint to display the new speed */
-	UFUNCTION(BlueprintImplementableEvent, Category = Vehicle)
+	UFUNCTION(BlueprintImplementableEvent, Category="Vehicle")
 	void OnSpeedUpdate(float NewSpeed);
 
 	/** Implemented in Blueprint to display the new gear */
-	UFUNCTION(BlueprintImplementableEvent, Category = Vehicle)
+	UFUNCTION(BlueprintImplementableEvent, Category="Vehicle")
 	void OnGearUpdate(int32 NewGear);
 };

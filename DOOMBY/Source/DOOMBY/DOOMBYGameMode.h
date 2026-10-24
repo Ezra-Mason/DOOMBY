@@ -6,7 +6,7 @@
 #include "GameFramework/GameModeBase.h"
 #include "DOOMBYGameMode.generated.h"
 
-UCLASS(MinimalAPI)
+UCLASS(abstract)
 class ADOOMBYGameMode : public AGameModeBase
 {
 	GENERATED_BODY()

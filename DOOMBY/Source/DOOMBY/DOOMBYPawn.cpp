@@ -10,10 +10,10 @@
 #include "EnhancedInputSubsystems.h"
 #include "InputActionValue.h"
 #include "ChaosWheeledVehicleMovementComponent.h"
+#include "DOOMBY.h"
+#include "TimerManager.h"
 
 #define LOCTEXT_NAMESPACE "VehiclePawn"
-
-DEFINE_LOG_CATEGORY(LogTemplateVehicle);
 
 ADOOMBYPawn::ADOOMBYPawn()
 {
@@ -88,8 +88,24 @@ void ADOOMBYPawn::SetupPlayerInputComponent(class UInputComponent* PlayerInputCo
 	}
 	else
 	{
-		UE_LOG(LogTemplateVehicle, Error, TEXT("'%s' Failed to find an Enhanced Input component! This template is built to use the Enhanced Input system. If you intend to use the legacy system, then you will need to update this C++ file."), *GetNameSafe(this));
+		UE_LOG(LogDOOMBY, Error, TEXT("'%s' Failed to find an Enhanced Input component! This template is built to use the Enhanced Input system. If you intend to use the legacy system, then you will need to update this C++ file."), *GetNameSafe(this));
 	}
+}
+
+void ADOOMBYPawn::BeginPlay()
+{
+	Super::BeginPlay();
+
+	// set up the flipped check timer
+	GetWorld()->GetTimerManager().SetTimer(FlipCheckTimer, this, &ADOOMBYPawn::FlippedCheck, FlipCheckTime, true);
+}
+
+void ADOOMBYPawn::EndPlay(EEndPlayReason::Type EndPlayReason)
+{
+	// clear the flipped check timer
+	GetWorld()->GetTimerManager().ClearTimer(FlipCheckTimer);
+
+	Super::EndPlay(EndPlayReason);
 }
 
 void ADOOMBYPawn::Tick(float Delta)
@@ -109,47 +125,104 @@ void ADOOMBYPawn::Tick(float Delta)
 
 void ADOOMBYPawn::Steering(const FInputActionValue& Value)
 {
-	// get the input magnitude for steering
-	float SteeringValue = Value.Get<float>();
-
-	// add the input
-	ChaosVehicleMovement->SetSteeringInput(SteeringValue);
+	// route the input
+	DoSteering(Value.Get<float>());
 }
 
 void ADOOMBYPawn::Throttle(const FInputActionValue& Value)
 {
-	// get the input magnitude for the throttle
-	float ThrottleValue = Value.Get<float>();
-
-	// add the input
-	ChaosVehicleMovement->SetThrottleInput(ThrottleValue);
+	// route the input
+	DoThrottle(Value.Get<float>());
 }
 
 void ADOOMBYPawn::Brake(const FInputActionValue& Value)
 {
-	// get the input magnitude for the brakes
-	float BreakValue = Value.Get<float>();
-
-	// add the input
-	ChaosVehicleMovement->SetBrakeInput(BreakValue);
+	// route the input
+	DoBrake(Value.Get<float>());
 }
 
 void ADOOMBYPawn::StartBrake(const FInputActionValue& Value)
 {
-	// call the Blueprint hook for the break lights
-	BrakeLights(true);
+	// route the input
+	DoBrakeStart();
 }
 
 void ADOOMBYPawn::StopBrake(const FInputActionValue& Value)
 {
-	// call the Blueprint hook for the break lights
+	// route the input
+	DoBrakeStop();
+}
+
+void ADOOMBYPawn::StartHandbrake(const FInputActionValue& Value)
+{
+	// route the input
+	DoHandbrakeStart();
+}
+
+void ADOOMBYPawn::StopHandbrake(const FInputActionValue& Value)
+{
+	// route the input
+	DoHandbrakeStop();
+}
+
+void ADOOMBYPawn::LookAround(const FInputActionValue& Value)
+{
+	// route the input
+	DoLookAround(Value.Get<float>());
+}
+
+void ADOOMBYPawn::ToggleCamera(const FInputActionValue& Value)
+{
+	// route the input
+	DoToggleCamera();
+}
+
+void ADOOMBYPawn::ResetVehicle(const FInputActionValue& Value)
+{
+	// route the input
+	DoResetVehicle();
+}
+
+void ADOOMBYPawn::DoSteering(float SteeringValue)
+{
+	// add the input
+	ChaosVehicleMovement->SetSteeringInput(SteeringValue);
+}
+
+void ADOOMBYPawn::DoThrottle(float ThrottleValue)
+{
+	// add the input
+	ChaosVehicleMovement->SetThrottleInput(ThrottleValue);
+
+	// reset the brake input
+	ChaosVehicleMovement->SetBrakeInput(0.0f);
+}
+
+void ADOOMBYPawn::DoBrake(float BrakeValue)
+{
+	// add the input
+	ChaosVehicleMovement->SetBrakeInput(BrakeValue);
+
+	// reset the throttle input
+	ChaosVehicleMovement->SetThrottleInput(0.0f);
+}
+
+void ADOOMBYPawn::DoBrakeStart()
+{
+	// call the Blueprint hook for the brake lights
+	BrakeLights(true);
+}
+
+void ADOOMBYPawn::DoBrakeStop()
+{
+	// call the Blueprint hook for the brake lights
 	BrakeLights(false);
 
 	// reset brake input to zero
 	ChaosVehicleMovement->SetBrakeInput(0.0f);
 }
 
-void ADOOMBYPawn::StartHandbrake(const FInputActionValue& Value)
+void ADOOMBYPawn::DoHandbrakeStart()
 {
 	// add the input
 	ChaosVehicleMovement->SetHandbrakeInput(true);
@@ -158,7 +231,7 @@ void ADOOMBYPawn::StartHandbrake(const FInputActionValue& Value)
 	BrakeLights(true);
 }
 
-void ADOOMBYPawn::StopHandbrake(const FInputActionValue& Value)
+void ADOOMBYPawn::DoHandbrakeStop()
 {
 	// add the input
 	ChaosVehicleMovement->SetHandbrakeInput(false);
@@ -167,16 +240,13 @@ void ADOOMBYPawn::StopHandbrake(const FInputActionValue& Value)
 	BrakeLights(false);
 }
 
-void ADOOMBYPawn::LookAround(const FInputActionValue& Value)
+void ADOOMBYPawn::DoLookAround(float YawDelta)
 {
-	// get the flat angle value for the input 
-	float LookValue = Value.Get<float>();
-
-	// add the input
-	BackSpringArm->AddLocalRotation(FRotator(0.0f, LookValue, 0.0f));
+	// rotate the spring arm
+	BackSpringArm->AddLocalRotation(FRotator(0.0f, YawDelta, 0.0f));
 }
 
-void ADOOMBYPawn::ToggleCamera(const FInputActionValue& Value)
+void ADOOMBYPawn::DoToggleCamera()
 {
 	// toggle the active camera flag
 	bFrontCameraActive = !bFrontCameraActive;
@@ -185,7 +255,7 @@ void ADOOMBYPawn::ToggleCamera(const FInputActionValue& Value)
 	BackCamera->SetActive(!bFrontCameraActive);
 }
 
-void ADOOMBYPawn::ResetVehicle(const FInputActionValue& Value)
+void ADOOMBYPawn::DoResetVehicle()
 {
 	// reset to a location slightly above our current one
 	FVector ResetLocation = GetActorLocation() + FVector(0.0f, 0.0f, 50.0f);
@@ -194,14 +264,36 @@ void ADOOMBYPawn::ResetVehicle(const FInputActionValue& Value)
 	FRotator ResetRotation = GetActorRotation();
 	ResetRotation.Pitch = 0.0f;
 	ResetRotation.Roll = 0.0f;
-	
+
 	// teleport the actor to the reset spot and reset physics
 	SetActorTransform(FTransform(ResetRotation, ResetLocation, FVector::OneVector), false, nullptr, ETeleportType::TeleportPhysics);
 
 	GetMesh()->SetPhysicsAngularVelocityInDegrees(FVector::ZeroVector);
 	GetMesh()->SetPhysicsLinearVelocity(FVector::ZeroVector);
+}
 
-	UE_LOG(LogTemplateVehicle, Error, TEXT("Reset Vehicle"));
+void ADOOMBYPawn::FlippedCheck()
+{
+	// check the difference in angle between the mesh's up vector and world up
+	const float UpDot = FVector::DotProduct(FVector::UpVector, GetMesh()->GetUpVector());
+
+	if (UpDot < FlipCheckMinDot)
+	{
+		// is this the second time we've checked that the vehicle is still flipped?
+		if (bPreviousFlipCheck)
+		{
+			// reset the vehicle to upright
+			DoResetVehicle();
+		}
+		
+		// set the flipped check flag so the next check resets the car
+		bPreviousFlipCheck = true;
+
+	} else {
+
+		// we're upright. reset the flipped check flag
+		bPreviousFlipCheck = false;
+	}
 }
 
 #undef LOCTEXT_NAMESPACE

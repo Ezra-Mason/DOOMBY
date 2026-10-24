@@ -6,24 +6,85 @@
 #include "DOOMBYUI.h"
 #include "EnhancedInputSubsystems.h"
 #include "ChaosWheeledVehicleMovementComponent.h"
+#include "Blueprint/UserWidget.h"
+#include "DOOMBY.h"
+#include "Kismet/GameplayStatics.h"
+#include "GameFramework/PlayerStart.h"
+#include "Widgets/Input/SVirtualJoystick.h"
 
 void ADOOMBYPlayerController::BeginPlay()
 {
 	Super::BeginPlay();
+	
+	// ensure we're attached to the vehicle pawn so that World Partition streaming works correctly
+	bAttachToPawn = true;
+}
 
-	// get the enhanced input subsystem
-	if (UEnhancedInputLocalPlayerSubsystem* Subsystem = ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(GetLocalPlayer()))
+void ADOOMBYPlayerController::SetupInputComponent()
+{
+	Super::SetupInputComponent();
+	
+	// only add IMCs for local player controllers
+	if (IsLocalPlayerController())
 	{
-		// add the mapping context so we get controls
-		Subsystem->AddMappingContext(InputMappingContext, 0);
+		// Add Input Mapping Contexts
+		if (UEnhancedInputLocalPlayerSubsystem* Subsystem = ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(GetLocalPlayer()))
+		{
+			for (UInputMappingContext* CurrentContext : DefaultMappingContexts)
+			{
+				Subsystem->AddMappingContext(CurrentContext, 0);
+			}
+
+			// only add these IMCs if we're not using mobile touch input
+			if (!ShouldUseTouchControls())
+			{
+				for (UInputMappingContext* CurrentContext : MobileExcludedMappingContexts)
+				{
+					Subsystem->AddMappingContext(CurrentContext, 0);
+				}
+			}
+
+			if (bUseSteeringWheelControls)
+			{
+				Subsystem->AddMappingContext(SteeringWheelInputMappingContext, 0);
+			}
+		}
 	}
 
-	// spawn the UI widget and add it to the viewport
-	VehicleUI = CreateWidget<UDOOMBYUI>(this, VehicleUIClass);
+	// only spawn UI on local player controllers
+	if (IsLocalPlayerController())
+	{
+		if (ShouldUseTouchControls())
+		{
+			// spawn the mobile controls widget
+			MobileControlsWidget = CreateWidget<UUserWidget>(this, MobileControlsWidgetClass);
 
-	check(VehicleUI);
+			if (MobileControlsWidget)
+			{
+				// add the controls to the player screen
+				MobileControlsWidget->AddToPlayerScreen(0);
 
-	VehicleUI->AddToViewport();
+			} else {
+
+				UE_LOG(LogDOOMBY, Error, TEXT("Could not spawn mobile controls widget."));
+
+			}
+		}
+		
+
+		// spawn the UI widget and add it to the viewport
+		VehicleUI = CreateWidget<UDOOMBYUI>(this, VehicleUIClass);
+
+		if (VehicleUI)
+		{
+			VehicleUI->AddToPlayerScreen(0);
+
+		} else {
+
+			UE_LOG(LogDOOMBY, Error, TEXT("Could not spawn vehicle UI widget."));
+
+		}
+	}
 }
 
 void ADOOMBYPlayerController::Tick(float Delta)
@@ -43,4 +104,32 @@ void ADOOMBYPlayerController::OnPossess(APawn* InPawn)
 
 	// get a pointer to the controlled pawn
 	VehiclePawn = CastChecked<ADOOMBYPawn>(InPawn);
+
+	// subscribe to the pawn's OnDestroyed delegate
+	VehiclePawn->OnDestroyed.AddDynamic(this, &ADOOMBYPlayerController::OnPawnDestroyed);
+}
+
+void ADOOMBYPlayerController::OnPawnDestroyed(AActor* DestroyedPawn)
+{
+	// find the player start
+	TArray<AActor*> ActorList;
+	UGameplayStatics::GetAllActorsOfClass(GetWorld(), APlayerStart::StaticClass(), ActorList);
+
+	if (ActorList.Num() > 0)
+	{
+		// spawn a vehicle at the player start
+		const FTransform SpawnTransform = ActorList[0]->GetActorTransform();
+
+		if (ADOOMBYPawn* RespawnedVehicle = GetWorld()->SpawnActor<ADOOMBYPawn>(VehiclePawnClass, SpawnTransform))
+		{
+			// possess the vehicle
+			Possess(RespawnedVehicle);
+		}
+	}
+}
+
+bool ADOOMBYPlayerController::ShouldUseTouchControls() const
+{
+	// are we on a mobile platform? Should we force touch?
+	return SVirtualJoystick::ShouldDisplayTouchInterface() || bForceTouchControls;
 }

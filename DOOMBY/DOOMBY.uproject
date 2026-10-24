@@ -1,6 +1,6 @@
 {
 	"FileVersion": 3,
-	"EngineAssociation": "5.3",
+	"EngineAssociation": "{1C6E8C65-490E-FE88-8448-089878BD4FE4}",
 	"Category": "",
 	"Description": "",
 	"Modules": [
@@ -27,8 +27,14 @@
 			]
 		},
 		{
-			"Name": "RawInput",
-			"Enabled": true
+			"Name": "GameInputWindows",
+			"Enabled": true,
+			"SupportedTargetPlatforms": [
+				"Win64"
+			],
+			"TargetDenyList": [
+				"Server"
+			]
 		}
 	]
 }
